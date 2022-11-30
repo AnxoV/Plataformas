@@ -167,7 +167,7 @@ class State {
 /**
  * Updates the state of the program and returns a new State object.
  * @param {Number} time Milliseconds from the last frame
- * @param {{key: boolean}} keys The key states
+ * @param {{key: boolean}} keys The pressed keys
  * @returns The new state
  */
 State.prototype.update = function(time, keys) {
@@ -304,7 +304,7 @@ Player.prototype.colour = "blue";
  * Updates the state of the player and returns a new Player object.
  * @param {Number} time Milliseconds from the last frame
  * @param {State} state The program state
- * @param {{key: boolean}} keys The key states
+ * @param {{key: boolean}} keys The pressed keys
  * @returns The new player
  */
 Player.prototype.update = function(time, state, keys) {
@@ -466,30 +466,34 @@ const overlap = function(actor1, actor2) {
 /**
  * Tracks the keypress of any given key.
  * @param {String[]} keys The keys to track
- * @returns The key states
+ * @returns The pressed keys
  */
-const trackKeys = function(keys) {
+function trackKeys(keys) {
     let down = Object.create(null);
-    const track = function(event) {
+    function track(event) {
         if (keys.includes(event.key)) {
             down[event.key] = event.type == "keydown";
             event.preventDefault();
         }
-    };
+    }
     window.addEventListener("keydown", track);
     window.addEventListener("keyup", track);
+    
+    down.unregister = () => {
+        window.removeEventListener("keydown", track);
+        window.removeEventListener("keyup", track);
+    }
     return down;
 }
 
 /**
  * Animation loop
  */
-const runAnimation = animation => {
+function runAnimation(animation) {
     let then = null;
-    const frame = now => {
+    function frame(now) {
         if (then !== null) {
             const deltatime = Math.min(100, now-then) / 1000;
-
             if (animation(deltatime) === false) {
                 return;
             }
@@ -509,23 +513,47 @@ const runAnimation = animation => {
  * @returns A promise from the level
  */
 const runLevel = function(display, level) {
-    let ending = 1;
     let state = State.start(level);
+    let ending = 1;
     return new Promise(resolve => {
-        runAnimation(time => {
-            state = state.update(time, config.arrowKeys);
+        let paused = false;
+        const togglePause = (e) => {
+            if (e.key == "Escape") {
+                paused = !paused;
+            }
+        }
+
+        const waitForResume = () => {
+            if (paused) {
+                setTimeout(waitForResume, 100);
+            } else {
+                runAnimation(animate);
+            }
+        }
+
+        const animate = (time) => {
+            state = state.update(time, arrowKeys);
             display.sync(state);
-            if (state.status == "playing") 
+            if (paused) {
+                waitForResume();
+                return false;
+            } else if (state.status == "playing") {
                 return true;
-            else if (ending > 0) {
+            } else if (ending > 0) {
                 ending -= time;
                 return true;
             } else {
                 display.clear();
                 resolve(state.status);
+                document.removeEventListener("keydown", togglePause);
+                arrowKeys.unregister();
                 return false;
             }
-        });
+        };
+
+        document.addEventListener("keydown", togglePause);
+        let arrowKeys = trackKeys(["ArrowLeft", "ArrowRight", "ArrowUp", "Escape"]);
+        runAnimation(animate);
     });
     
 }
@@ -545,7 +573,6 @@ const runGame = async function(plans, config) {
         status = await runLevel(display, level);
         if (status == "won") i++;
     }
-    console.log("You've won!");
 }
 
 const plans = [
@@ -637,7 +664,6 @@ const config = {
         "wall": "gray",
         "lava": "red",
     },
-    arrowKeys: trackKeys(["ArrowLeft", "ArrowRight", "ArrowUp"]),
 }
 
 
