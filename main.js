@@ -4,7 +4,7 @@
  */
 class Canvas {
     /**
-     * @param {HTMLElement} parent The canvas element parent
+     * @param {HTMLElement} parent The canvas parent element
      * @param {Number} width The canvas width
      * @param {Number} height The canvas height
      */
@@ -25,6 +25,7 @@ class Canvas {
         this.canvas.width = width,
         this.canvas.height = height;
     }
+    
 
     /**
      * Clears the canvas.
@@ -299,7 +300,7 @@ class Player {
 }
 /** The player size relative to a block unit. */
 Player.prototype.size = new Vector(0.8, 1.5);
-Player.prototype.colour = "blue";
+
 /**
  * Updates the state of the player and returns a new Player object.
  * @param {Number} time Milliseconds from the last frame
@@ -358,17 +359,17 @@ class Lava {
      */
     static create(position, char) {
         if (char == "=") {
-            return new Lava(position, new Vector(2, 0))
+            return new Lava(position, new Vector(config.lavaBaseSpeed, 0))
         } else if (char == "|") {
-            return new Lava(position, new Vector(0, 2));
+            return new Lava(position, new Vector(0, config.lavaBaseSpeed));
         } else if (char == "v") {
-            return new Lava(position, new Vector(0, 3), position);
+            return new Lava(position, new Vector(0, config.lavaDrippingSpeed), position);
         }
     }
 }
 /** The lava size relative to a block unit. */
 Lava.prototype.size = new Vector(1, 1);
-Lava.prototype.colour = "red";
+
 /**
  * Returns a new State object with the status property set to "lost".
  * @param {State} state The program state
@@ -426,7 +427,7 @@ class Coin {
 }
 /** The coin size relative to a block unit. */
 Coin.prototype.size = new Vector(0.6, 0.6);
-Coin.prototype.colour = "yellow";
+
 /**
  * Returns a new State object with the coin removed.
  * @param {State} state The program state
@@ -456,7 +457,7 @@ Coin.prototype.update = function(time) {
  * @param {*} actor2 The sencond actor
  * @returns True if they overlap, false otherwise
  */
-const overlap = function(actor1, actor2) {
+function overlap(actor1, actor2) {
     return actor1.position.x + actor1.size.x > actor2.position.x
             && actor1.position.x < actor2.position.x + actor2.size.x
             && actor1.position.y + actor1.size.y > actor2.position.y
@@ -493,7 +494,7 @@ function runAnimation(animation) {
     let then = null;
     function frame(now) {
         if (then !== null) {
-            const deltatime = Math.min(100, now-then) / 1000;
+            const deltatime = .5//Math.min(100, now-then) / 1000;
             if (animation(deltatime) === false) {
                 return;
             }
@@ -512,7 +513,7 @@ function runAnimation(animation) {
  * @param {Level} level The level
  * @returns A promise from the level
  */
-const runLevel = function(display, level) {
+function runLevel(display, level) {
     let state = State.start(level);
     let ending = 1;
     return new Promise(resolve => {
@@ -532,7 +533,7 @@ const runLevel = function(display, level) {
         }
 
         const animate = (time) => {
-            state = state.update(time, arrowKeys);
+            state = state.update(time, config.arrowKeys);
             display.sync(state);
             if (paused) {
                 waitForResume();
@@ -546,16 +547,24 @@ const runLevel = function(display, level) {
                 display.clear();
                 resolve(state.status);
                 document.removeEventListener("keydown", togglePause);
-                arrowKeys.unregister();
                 return false;
             }
         };
 
-        document.addEventListener("keydown", togglePause);
-        let arrowKeys = trackKeys(["ArrowLeft", "ArrowRight", "ArrowUp", "Escape"]);
+        document.addEventListener("keydown", togglePause); 
         runAnimation(animate);
     });
     
+}
+
+/**
+ * Loads configuration needed in the actor's prototype.
+ * @param {*} config The program configuration
+ */
+function loadConfig(config) {
+    Player.prototype.colour = config.colours.player;
+    Lava.prototype.colour = config.colours.lava;
+    Coin.prototype.colour = config.colours.coin;
 }
 
 /**
@@ -563,37 +572,44 @@ const runLevel = function(display, level) {
  * @param {Level[]} plans The levels
  * @param {*} config The configuration
  */
-const runGame = async function(plans, config) {
-    let level;
+async function runGame(plans, config) {
+    loadConfig(config);
     let display = new Canvas(document.body);
-    let status;
     for (let i = 0; i < plans.length;) {
-        level = new Level(plans[i]);
+        let level = new Level(plans[i]);
         display.resize(level.width*config.blockSize, level.height*config.blockSize);
-        status = await runLevel(display, level);
+        let status = await runLevel(display, level);
         if (status == "won") i++;
     }
+    config.arrowKeys.unregister();
 }
 
 const plans = [
 `
 ....................
+....................
+....................
+..#.@............#..
 ..#..............#..
-..#..............#..
-..#.@...o..o..o..#..
+..#.....o..o..o..#..
 ..################..
 ....................`,
 `
 ....................
-..#=.......o.....#..
-..#..............#..
-..#.@...o.....o.=#..
+....................
+....................
+..#.@............#..
+..#........o.....#..
+..#.....o.....o.=#..
 ..################..
 ....................`,
 `
-........#####.........
+.....................
+.....................
+.....................
+..#.@...#####.....#..
 ..#......|........#..
-..#.@.............#..
+..#...............#..
 ..######..o..######..
 ..#...............#..
 ..#...............#..
@@ -607,10 +623,10 @@ const plans = [
 .....................
 .....................
 .....................
-.....................
-.....................
 ..#...............#..
-..#.@...........o.#..
+..#.@.............#..
+..#...............#..
+..#.............o.#..
 ..######.......####..
 .......#.......#.....
 .......#+++++++#.....
@@ -620,17 +636,17 @@ const plans = [
 `
 ######################
 ######.###v#..##v#.###
-##..#..........o.....#
-#....................#
-#.@................o.#
+##..#.........o......#
+#.@..................#
+#..................o.#
 ######################`,
 `
 ........................
 ........................
 ........................
-........................
-........................
 ......@.................
+........................
+........................
 #....###..###..#..#....#
 |....#.....#...##.#.....
 .#...###...#...#.##...#.
@@ -643,27 +659,32 @@ const plans = [
 ];
 
 const config = {
-    blockSize: 40,
-    playerXSpeed: 7,
-    jumpSpeed: 15,
-    gravity: 30,
-    wobbleSpeed: 7,
-    wobbleDist: 0.05,
-    levelChars: {
-        ".": "empty",
-        "#": "wall",
-        "+": "lava",
-        "@": Player,
-        "o": Coin,
-        "=": Lava,
-        "|": Lava,
-        "v": Lava,
-    },
-    colours: {
-        "empty": "white",
-        "wall": "gray",
-        "lava": "red",
-    },
+        blockSize: 20,
+        playerXSpeed: 0.3,
+        jumpSpeed: 0.5,
+        gravity: 0.04,
+        wobbleSpeed: 0.3,
+        wobbleDist: 0.05,
+        lavaBaseSpeed: .1,
+        lavaDrippingSpeed: .12,
+        levelChars: {
+            ".": "empty",
+            "#": "wall",
+            "+": "lava",
+            "@": Player,
+            "o": Coin,
+            "=": Lava,
+            "|": Lava,
+            "v": Lava,
+        },
+        arrowKeys: trackKeys(["ArrowLeft", "ArrowRight", "ArrowUp", "Escape"]),
+        colours: {
+            empty: "#34a6fb",
+            wall: "white",
+            lava: "#ff6363",
+            player: "#404040",
+            coin: "yellow",
+        },
 }
 
 

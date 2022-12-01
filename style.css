@@ -18,7 +18,3 @@ body {
 body > * {
     margin: 1rem;
 }
-
-canvas {
-    border: 1px solid black;
-}
